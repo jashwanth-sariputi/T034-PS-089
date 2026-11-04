@@ -1,0 +1,23 @@
+
+{
+  "customers": [
+    {
+      "customer_id": "CUST001",
+      "customer_name": "Jashwanth",
+      "email": "jashwanth@example.com",
+      "plan_name": "STARTER",
+      "monthly_quota": 100000,
+      "overage_enabled": false,
+      "price_book_code": "API_VOLUME"
+    },
+    {
+      "customer_id": "CUST002",
+      "customer_name": "AB",
+      "email": "ab@example.com",
+      "plan_name": "GROWTH",
+      "monthly_quota": 1000000,
+      "overage_enabled": true,
+      "price_book_code": "API_GRADUATED"
+    }
+  ]
+}

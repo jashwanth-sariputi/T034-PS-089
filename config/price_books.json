@@ -1,0 +1,64 @@
+
+{
+  "price_books": [
+    {
+      "price_book_code": "API_VOLUME",
+      "price_book_name": "API Volume Pricing",
+      "tier_type": "VOLUME",
+      "currency": "INR",
+      "tiers": [
+        {
+          "lower_limit": 0,
+          "upper_limit": 100000,
+          "unit_price": "0.10"
+        },
+        {
+          "lower_limit": 100001,
+          "upper_limit": 1000000,
+          "unit_price": "0.08"
+        },
+        {
+          "lower_limit": 1000001,
+          "upper_limit": null,
+          "unit_price": "0.05"
+        }
+      ]
+    },
+    {
+      "price_book_code": "API_GRADUATED",
+      "price_book_name": "API Graduated Pricing",
+      "tier_type": "GRADUATED",
+      "currency": "INR",
+      "tiers": [
+        {
+          "lower_limit": 0,
+          "upper_limit": 100000,
+          "unit_price": "0.10"
+        },
+        {
+          "lower_limit": 100001,
+          "upper_limit": 1000000,
+          "unit_price": "0.08"
+        },
+        {
+          "lower_limit": 1000001,
+          "upper_limit": null,
+          "unit_price": "0.05"
+        }
+      ]
+    },
+    {
+      "price_book_code": "STORAGE_VOLUME",
+      "price_book_name": "Storage Volume Pricing",
+      "tier_type": "VOLUME",
+      "currency": "INR",
+      "tiers": [
+        {
+          "lower_limit": 0,
+          "upper_limit": null,
+          "unit_price": "2.00"
+        }
+      ]
+    }
+  ]
+}

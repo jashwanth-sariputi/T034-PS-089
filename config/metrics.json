@@ -1,0 +1,30 @@
+
+{
+  "metrics": [
+    {
+      "metric_code": "API_CALLS",
+      "metric_name": "API Calls",
+      "unit": "calls",
+      "aggregation_type": "SUM",
+      "rounding_precision": 0,
+      "free_allowance": 10000
+    },
+    {
+      "metric_code": "STORAGE",
+      "metric_name": "Storage Usage",
+      "unit": "GB-month",
+      "aggregation_type": "MAX_AVG",
+      "rounding_precision": 2,
+      "free_allowance": 1
+    },
+    {
+      "metric_code": "ACTIVE_USERS",
+      "metric_name": "Monthly Active Users",
+      "unit": "users",
+      "aggregation_type": "UNIQUE",
+      "rounding_precision": 0,
+      "free_allowance": 0
+    }
+  ]
+}
+
