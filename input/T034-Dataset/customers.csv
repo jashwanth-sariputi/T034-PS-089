@@ -1,0 +1,16 @@
+customer_id,company_name,state,gstin,plan_id,price_book_id,monthly_commitment,overage_enabled,uses_storage
+API-001,Swiggle Foods Tech Pvt Ltd,Tamil Nadu,33CDKCD7075G1ZR,GROWTH,PB-GRADUATED,0.00,true,false
+API-002,FleetEye Telematics Pvt Ltd,Delhi,07ZSWCC5188K1ZJ,GROWTH,PB-GRADUATED,50000.00,true,false
+API-003,Kirana Cloud Pvt Ltd,Telangana,36YMMCQ6169T1ZX,STARTER,PB-VOLUME,0.00,false,false
+API-004,Sutra Commerce Pvt Ltd,Gujarat,24VRNCS4697S1ZZ,GROWTH,PB-VOLUME,0.00,false,false
+API-005,CareerBridge HR Pvt Ltd,Maharashtra,27YSXCD9672R1ZE,STARTER,PB-VOLUME,0.00,false,false
+API-006,Yatra Buddy Pvt Ltd,Haryana,,STARTER,PB-GRADUATED,0.00,false,false
+API-007,Ghar Rentals Pvt Ltd,Telangana,36XKTCW8766G1ZJ,SCALE,PB-ENTERPRISE,0.00,false,false
+API-008,AgriNext Analytics Pvt Ltd,Karnataka,29WVQCS7534Y1ZX,GROWTH,PB-GRADUATED,0.00,false,false
+API-009,MedLink Diagnostics Pvt Ltd,Haryana,,STARTER,PB-GRADUATED,0.00,false,false
+API-010,Bimaa Insurtech Pvt Ltd,Karnataka,29LQDCQ8472P1ZW,GROWTH,PB-VOLUME,0.00,false,false
+API-011,Nyay Legal AI Pvt Ltd,Haryana,,STARTER,PB-GRADUATED,0.00,false,false
+API-012,Vaani Voice AI Pvt Ltd,Karnataka,29PEQCA1079T1Z5,SCALE,PB-ENTERPRISE,0.00,false,false
+API-013,Ludo Arena Games Pvt Ltd,Tamil Nadu,33VBTCJ5205X1ZX,SCALE,PB-ENTERPRISE,0.00,false,false
+API-014,Shiksha Labs Pvt Ltd,Maharashtra,27RUECV8416X1ZA,GROWTH,PB-VOLUME,0.00,false,true
+API-015,Paysetu Fintech Pvt Ltd,Telangana,36NESCG6016C1Z3,GROWTH,PB-GRADUATED,0.00,false,false
