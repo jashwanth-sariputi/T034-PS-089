@@ -45,74 +45,53 @@ def save_csv(filename, rows, columns):
         writer.writerows(rows)
 
 
-def process_events():
+
+def create_ingestion_state():
     customers = {
         row["customer_id"]: row
         for row in load_csv("customers.csv")
     }
 
     events = load_csv("usage_events.csv")
-    commands = (INPUT / "commands.txt").read_text(
-        encoding="utf-8-sig"
-    ).splitlines()
 
-    first_ingestion = {}
-    free_used = defaultdict(Decimal)
-    quota_used = defaultdict(Decimal)
+    return {
+        "customers": customers,
+        "events": events,
+        "first_ingestion": {},
+        "free_used": defaultdict(Decimal),
+        "quota_used": defaultdict(Decimal),
+        "rate_history": defaultdict(list),
+        "burst_used": defaultdict(int),
+        "decisions": {},
+        "event_index": 0,
+        "open_month": None,
+    }
 
-    rate_history = defaultdict(list)
-    burst_used = defaultdict(int)
 
-    decisions = {}
-    event_index = 0
-    open_month = None
+def open_ingestion_month(state, month):
+    if not month:
+        raise ValueError("OPEN_MONTH requires a month")
 
-    for line in commands:
-        line = line.strip()
+    state["open_month"] = month
+    print(f"\nOpened usage month: {month}")
 
-        if not line or line.startswith("#"):
-            continue
 
-        parts = line.split("|")
-        command = parts[0]
+def save_event_decisions(state, require_complete=False):
+    events = state["events"]
+    decisions = state["decisions"]
 
-        if command == "OPEN_MONTH":
-            open_month = parts[1]
-
-        elif command == "INGEST_UNTIL":
-            if open_month is None:
-                raise ValueError("OPEN_MONTH must come before ingestion")
-
-            cutoff = parse_timestamp(parts[1])
-
-            while event_index < len(events):
-                event = events[event_index]
-                ingestion_time = parse_timestamp(event["ingested_ts"])
-
-                if ingestion_time >= cutoff:
-                    break
-
-                decision = process_one_event(
-                    event,
-                    customers,
-                    first_ingestion,
-                    free_used,
-                    quota_used,
-                    rate_history,
-                    burst_used,
-                )
-
-                decisions[event["event_id"]] = decision
-                event_index += 1
-
-    # Every event should have been reached by the final ingestion command.
-    if event_index != len(events):
+    if require_complete and len(decisions) != len(events):
+        remaining = len(events) - len(decisions)
         raise ValueError(
-            f"{len(events) - event_index} events were not processed. "
+            f"{remaining} events were not processed. "
             "Check the final INGEST_UNTIL command."
         )
 
-    output_rows = [decisions[event["event_id"]] for event in events]
+    output_rows = [
+        decisions[event["event_id"]]
+        for event in events
+        if event["event_id"] in decisions
+    ]
 
     columns = [
         "event_id",
@@ -126,9 +105,85 @@ def process_events():
 
     save_csv("event_decisions.csv", output_rows, columns)
 
-    print(f"Processed events: {len(output_rows)}")
-    print(f"Output: {OUTPUT / 'event_decisions.csv'}")
 
+def ingest_until(state, cutoff_value):
+    if state["open_month"] is None:
+        raise ValueError(
+            "OPEN_MONTH must come before ingestion"
+        )
+
+    cutoff = parse_timestamp(cutoff_value)
+
+    events = state["events"]
+    event_index = state["event_index"]
+    decisions = state["decisions"]
+
+    while event_index < len(events):
+        event = events[event_index]
+
+        ingestion_time = parse_timestamp(
+            event["ingested_ts"]
+        )
+
+        if ingestion_time >= cutoff:
+            break
+
+        decision = process_one_event(
+            event,
+            state["customers"],
+            state["first_ingestion"],
+            state["free_used"],
+            state["quota_used"],
+            state["rate_history"],
+            state["burst_used"],
+        )
+
+        decisions[event["event_id"]] = decision
+        event_index += 1
+
+    state["event_index"] = event_index
+
+    save_event_decisions(state)
+
+    print(
+        f"Ingested events: {event_index}/{len(events)}"
+    )
+    print(f"Ingestion cutoff: {cutoff_value}")
+
+
+def process_events():
+    state = create_ingestion_state()
+
+    commands = (INPUT / "commands.txt").read_text(
+        encoding="utf-8-sig"
+    ).splitlines()
+
+    for line in commands:
+        line = line.strip()
+
+        if not line or line.startswith("#"):
+            continue
+
+        parts = line.split("|")
+        command = parts[0]
+
+        if command == "OPEN_MONTH":
+            open_ingestion_month(state, parts[1])
+
+        elif command == "INGEST_UNTIL":
+            ingest_until(state, parts[1])
+
+    save_event_decisions(
+        state,
+        require_complete=True,
+    )
+
+    print(
+        f"Processed events: {state['event_index']}"
+    )
+    print(
+        f"Output: {OUTPUT / 'event_decisions.csv'}"
+    )
 
 def process_one_event(
     event,
@@ -142,7 +197,7 @@ def process_one_event(
     event_id = event["event_id"]
     customer_id = event["customer_id"]
     metric_id = event["metric_id"]
-    key = (customer_id, event["idempotency_key"])
+    key = (customer_id,metric_id, event["idempotency_key"])
 
     event_time = parse_timestamp(event["event_ts"])
     ingestion_time = parse_timestamp(event["ingested_ts"])

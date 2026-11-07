@@ -26,3 +26,6 @@ htmlcov/
 Thumbs.db
 # Generated reports
 output/*.csv
+
+# Generated run logs
+output/*.txt

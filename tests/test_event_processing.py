@@ -73,7 +73,11 @@ def test_duplicate_event():
     event = create_test_event()
 
     state = create_state()
-    key = ("API-TEST", "TESTKEY001")
+    key = (
+        event["customer_id"],
+        event["metric_id"],
+        event["idempotency_key"],
+    )
 
     state[1][key] = (
         parse_timestamp(event["ingested_ts"])

@@ -173,7 +173,8 @@ def load_uptime():
 # 4. LOAD EVENTS AND INGESTION DECISIONS
 # --------------------------------------------------
 
-def load_event_records():
+
+def load_event_records(allow_pending=False, cutoff=None):
     events = load_csv(EVENTS_FILE)
     decisions = load_csv(DECISIONS_FILE)
 
@@ -185,9 +186,26 @@ def load_event_records():
     records = []
 
     for event in events:
+        event_time = datetime.strptime(
+            event["event_ts"],
+            "%Y-%m-%d %H:%M:%S",
+        )
+
+        ingested_time = datetime.strptime(
+            event["ingested_ts"],
+            "%Y-%m-%d %H:%M:%S",
+        )
+
         decision = decision_map.get(event["event_id"])
 
         if decision is None:
+            if (
+                allow_pending
+                and cutoff is not None
+                and ingested_time >= cutoff
+            ):
+                continue
+
             raise ValueError(
                 f"Missing decision for event {event['event_id']}"
             )
@@ -195,20 +213,11 @@ def load_event_records():
         records.append({
             "event": event,
             "decision": decision,
-
-            "event_time": datetime.strptime(
-                event["event_ts"],
-                "%Y-%m-%d %H:%M:%S",
-            ),
-
-            "ingested_time": datetime.strptime(
-                event["ingested_ts"],
-                "%Y-%m-%d %H:%M:%S",
-            ),
+            "event_time": event_time,
+            "ingested_time": ingested_time,
         })
 
     return records
-
 
 def get_month_records(records, month, cutoff):
     selected = []
@@ -825,113 +834,101 @@ def calculate_month_charges(
 # 12. MAIN INVOICE GENERATION
 # --------------------------------------------------
 
-def generate_invoices():
 
-    cutoffs = load_invoice_cutoffs()
-    records = load_event_records()
-    metrics = load_metrics()
-    customers = load_customers()
-    price_books = load_price_books()
-    uptime_records = load_uptime()
+def create_invoice_state():
+    return {
+        "metrics": load_metrics(),
+        "customers": load_customers(),
+        "price_books": load_price_books(),
+        "uptime_records": load_uptime(),
+        "invoice_rows": [],
+        "previous_month_results": {},
+        "cutoffs": {},
+    }
 
-    months = sorted(cutoffs)
 
-    invoice_rows = []
+def generate_invoice_month(state, month, run_ts):
 
-    previous_month_results = {}
+    cutoff = datetime.strptime(
+        run_ts,
+        "%Y-%m-%d %H:%M:%S",
+    )
 
-    for month in months:
+    if month in state["cutoffs"]:
+        raise ValueError(
+            f"Invoice already generated for {month}"
+        )
 
-        cutoff = cutoffs[month]
+    # Load only events ingested before this invoice cutoff.
+    records = load_event_records(
+        allow_pending=True,
+        cutoff=cutoff,
+    )
 
-        # Calculate this month's usage charges.
-        current_charges = calculate_month_charges(
+    metrics = state["metrics"]
+    customers = state["customers"]
+    price_books = state["price_books"]
+    uptime_records = state["uptime_records"]
+
+    invoice_rows = state["invoice_rows"]
+    previous_month_results = state["previous_month_results"]
+    cutoffs = state["cutoffs"]
+
+    # Calculate this month's usage charges.
+    current_charges = calculate_month_charges(
+        records,
+        month,
+        cutoff,
+        metrics,
+        customers,
+        price_books,
+    )
+
+    prior_month = previous_month(month)
+
+    prior_base_charges = {}
+    prior_rollovers = {}
+
+    if prior_month in previous_month_results:
+
+        prior_results = previous_month_results[prior_month]
+
+        prior_base_charges = prior_results["base"]
+        prior_rollovers = prior_results["rollover"]
+
+    # --------------------------------------------------
+    # LATE EVENT ADJUSTMENTS
+    # --------------------------------------------------
+
+    adjustments = defaultdict(
+        lambda: Decimal("0")
+    )
+
+    if prior_month in cutoffs:
+
+        previous_cutoff = cutoffs[prior_month]
+
+        previous_at_invoice = calculate_month_charges(
             records,
-            month,
+            prior_month,
+            previous_cutoff,
+            metrics,
+            customers,
+            price_books,
+        )
+
+        previous_at_current_cutoff = calculate_month_charges(
+            records,
+            prior_month,
             cutoff,
             metrics,
             customers,
             price_books,
         )
 
-        prior_month = previous_month(month)
+        for customer_id in customers:
 
-        prior_base_charges = {}
-        prior_rollovers = {}
-
-        if prior_month in previous_month_results:
-
-            prior_results = previous_month_results[prior_month]
-
-            prior_base_charges = prior_results["base"]
-
-            prior_rollovers = prior_results["rollover"]
-
-        # --------------------------------------------------
-        # LATE EVENT ADJUSTMENTS
-        # --------------------------------------------------
-
-        adjustments = defaultdict(
-            lambda: Decimal("0")
-        )
-
-        if prior_month in cutoffs:
-
-            previous_cutoff = cutoffs[prior_month]
-
-            previous_at_invoice = calculate_month_charges(
-                records,
-                prior_month,
-                previous_cutoff,
-                metrics,
-                customers,
-                price_books,
-            )
-
-            previous_at_current_cutoff = calculate_month_charges(
-                records,
-                prior_month,
-                cutoff,
-                metrics,
-                customers,
-                price_books,
-            )
-
-            for customer_id in customers:
-
-                before = previous_at_invoice.get(
-                    customer_id,
-                    {
-                        "usage_charge": Decimal("0"),
-                        "overage_charge": Decimal("0"),
-                    },
-                )
-
-                after = previous_at_current_cutoff.get(
-                    customer_id,
-                    {
-                        "usage_charge": Decimal("0"),
-                        "overage_charge": Decimal("0"),
-                    },
-                )
-
-                adjustments[customer_id] = money(
-                    after["usage_charge"]
-                    + after["overage_charge"]
-                    - before["usage_charge"]
-                    - before["overage_charge"]
-                )
-
-        # --------------------------------------------------
-        # CREATE CUSTOMER INVOICES
-        # --------------------------------------------------
-
-        current_base_results = {}
-        current_rollover_results = {}
-
-        for customer_id, customer in sorted(customers.items()):
-
-            charges = current_charges.get(
+            before = previous_at_invoice.get(
                 customer_id,
                 {
                     "usage_charge": Decimal("0"),
@@ -939,151 +936,182 @@ def generate_invoices():
                 },
             )
 
-            usage_charge = money(
-                charges["usage_charge"]
+            after = previous_at_current_cutoff.get(
+                customer_id,
+                {
+                    "usage_charge": Decimal("0"),
+                    "overage_charge": Decimal("0"),
+                },
             )
 
-            overage_charge = money(
-                charges["overage_charge"]
+            adjustments[customer_id] = money(
+                after["usage_charge"]
+                + after["overage_charge"]
+                - before["usage_charge"]
+                - before["overage_charge"]
             )
 
-            # Commitment discount and top-up.
-            commitment = calculate_commitment(
-                customer,
-                usage_charge,
-            )
+    # --------------------------------------------------
+    # CREATE CUSTOMER INVOICES
+    # --------------------------------------------------
 
-            base_charge = commitment["base_charge"]
+    current_base_results = {}
+    current_rollover_results = {}
 
-            rollover_created = commitment["rollover_created"]
+    for customer_id, customer in sorted(customers.items()):
 
-            # Previous month's rollover.
-            previous_rollover = prior_rollovers.get(
+        charges = current_charges.get(
+            customer_id,
+            {
+                "usage_charge": Decimal("0"),
+                "overage_charge": Decimal("0"),
+            },
+        )
+
+        usage_charge = money(
+            charges["usage_charge"]
+        )
+
+        overage_charge = money(
+            charges["overage_charge"]
+        )
+
+        # Commitment discount and top-up.
+        commitment = calculate_commitment(
+            customer,
+            usage_charge,
+        )
+
+        base_charge = commitment["base_charge"]
+        rollover_created = commitment["rollover_created"]
+
+        # Previous month's rollover.
+        previous_rollover = prior_rollovers.get(
+            customer_id,
+            Decimal("0"),
+        )
+
+        rollover = calculate_rollover_usage(
+            previous_rollover,
+            overage_charge,
+        )
+
+        rollover_used = rollover["rollover_used"]
+
+        # Previous month's SLA credit.
+        sla_credit = calculate_sla_credit(
+            customer_id,
+            prior_month,
+            prior_base_charges.get(
                 customer_id,
                 Decimal("0"),
+            ),
+            base_charge,
+            uptime_records,
+        )
+
+        adjustment = adjustments[customer_id]
+
+        # Apply credits before minimum invoice amount.
+        amount_before_minimum = (
+            base_charge
+            + overage_charge
+            + adjustment
+            - rollover_used
+            - sla_credit
+        )
+
+        net = money(
+            max(
+                Decimal("100"),
+                amount_before_minimum,
             )
+        )
 
-            rollover = calculate_rollover_usage(
-                previous_rollover,
-                overage_charge,
-            )
+        # GST.
+        gst_details = calculate_gst(
+            customer,
+            net,
+        )
 
-            rollover_used = rollover["rollover_used"]
+        gst = gst_details["gst"]
 
-            # Previous month's SLA credit.
-            sla_credit = calculate_sla_credit(
-                customer_id,
-                prior_month,
-                prior_base_charges.get(
-                    customer_id,
-                    Decimal("0"),
-                ),
-                base_charge,
-                uptime_records,
-            )
+        # Final amount rounded to nearest rupee.
+        total = (net + gst).quantize(
+            Decimal("1"),
+            rounding=ROUND_HALF_UP,
+        )
 
-            # Late event adjustment.
-            adjustment = adjustments[customer_id]
+        invoice_rows.append({
 
-            # Apply credits before minimum invoice amount.
-            amount_before_minimum = (
-                base_charge
-                + overage_charge
-                + adjustment
-                - rollover_used
-                - sla_credit
-            )
+            "customer_id": customer_id,
+            "month": month,
+            "usage_charge": f"{usage_charge:.2f}",
+            "commitment_discount": (
+                f"{commitment['commitment_discount']:.2f}"
+            ),
+            "commitment_topup": (
+                f"{commitment['commitment_topup']:.2f}"
+            ),
+            "base_charge": f"{base_charge:.2f}",
+            "overage_charge": f"{overage_charge:.2f}",
+            "adjustments": f"{adjustment:.2f}",
+            "sla_credit": f"{sla_credit:.2f}",
+            "net": f"{net:.2f}",
+            "gst": f"{gst:.2f}",
+            "total_rounded": f"{total:.2f}",
+            "rollover_created": f"{rollover_created:.2f}",
+            "rollover_used": f"{rollover_used:.2f}",
+        })
 
-            # Minimum invoice: ₹100 after credits.
-            net = money(
-                max(
-                    Decimal("100"),
-                    amount_before_minimum,
-                )
-            )
+        current_base_results[customer_id] = base_charge
 
-            # GST.
-            gst_details = calculate_gst(
-                customer,
-                net,
-            )
+        current_rollover_results[customer_id] = (
+            rollover_created
+        )
 
-            gst = gst_details["gst"]
+    # Preserve results for the next month's credits and rollover.
+    previous_month_results[month] = {
+        "base": current_base_results,
+        "rollover": current_rollover_results,
+    }
 
-            # Final amount rounded to nearest rupee.
-            total = (net + gst).quantize(
-                Decimal("1"),
-                rounding=ROUND_HALF_UP,
-            )
+    # Remember this month's invoice cutoff.
+    cutoffs[month] = cutoff
 
-            # Prepare invoice output row.
-            invoice_rows.append({
-
-                "customer_id": customer_id,
-
-                "month": month,
-
-                "usage_charge": f"{usage_charge:.2f}",
-
-                "commitment_discount": (
-                    f"{commitment['commitment_discount']:.2f}"
-                ),
-
-                "commitment_topup": (
-                    f"{commitment['commitment_topup']:.2f}"
-                ),
-
-                "base_charge": f"{base_charge:.2f}",
-
-                "overage_charge": f"{overage_charge:.2f}",
-
-                "adjustments": f"{adjustment:.2f}",
-
-                "sla_credit": f"{sla_credit:.2f}",
-
-                "net": f"{net:.2f}",
-
-                "gst": f"{gst:.2f}",
-
-                "total_rounded": f"{total:.2f}",
-
-                "rollover_created": (
-                    f"{rollover_created:.2f}"
-                ),
-
-                "rollover_used": (
-                    f"{rollover_used:.2f}"
-                ),
-            })
-
-            current_base_results[customer_id] = base_charge
-
-            current_rollover_results[customer_id] = (
-                rollover_created
-            )
-
-        # Save results for next month's credits and rollover.
-        previous_month_results[month] = {
-            "base": current_base_results,
-            "rollover": current_rollover_results,
-        }
-
-    # --------------------------------------------------
-    # 13. SAVE INVOICES
-    # --------------------------------------------------
-
+    # Save cumulative invoices after each invoice command.
     save_csv(
         OUTPUT / "invoices.csv",
         invoice_rows,
         INVOICE_COLUMNS,
     )
 
-    print(f"Generated invoices: {len(invoice_rows)}")
+    print(f"Generated invoices for {month}: {len(customers)}")
+
+
+def generate_invoices():
+
+    state = create_invoice_state()
+
+    cutoffs = load_invoice_cutoffs()
+
+    for month in sorted(cutoffs):
+
+        run_ts = cutoffs[month].strftime(
+            "%Y-%m-%d %H:%M:%S"
+        )
+
+        generate_invoice_month(
+            state,
+            month,
+            run_ts,
+        )
+
+    print(f"Generated invoices: {len(state['invoice_rows'])}")
 
     print(
         f"Output: {OUTPUT / 'invoices.csv'}"
     )
-
 
 # --------------------------------------------------
 # 14. PROGRAM ENTRY POINT

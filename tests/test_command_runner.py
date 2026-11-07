@@ -105,25 +105,45 @@ def test_print_throttle_log(tmp_path, monkeypatch, capsys):
     write_csv(
         input_dir / "usage_events.csv",
         ["event_id", "customer_id", "event_ts"],
-        [{
-            "event_id": "EV-001978",
-            "customer_id": "API-013",
-            "event_ts": "2026-10-07 11:00:10",
-        }],
+        [
+            {
+                "event_id": "EV-001978",
+                "customer_id": "API-013",
+                "event_ts": "2026-10-07 11:00:10",
+            },
+            {
+                "event_id": "EV-BLOCKED",
+                "customer_id": "API-011",
+                "event_ts": "2026-10-08 12:00:00",
+            },
+        ],
     )
 
     write_csv(
         output_dir / "event_decisions.csv",
         [
             "event_id",
+            "decision",
             "throttled_quantity",
+            "blocked_quantity",
             "reason",
         ],
-        [{
-            "event_id": "EV-001978",
-            "throttled_quantity": "40",
-            "reason": "Rate limit exceeded",
-        }],
+        [
+            {
+                "event_id": "EV-001978",
+                "decision": "PARTIAL",
+                "throttled_quantity": "40",
+                "blocked_quantity": "0",
+                "reason": "Rate limit exceeded",
+            },
+            {
+                "event_id": "EV-BLOCKED",
+                "decision": "BLOCKED",
+                "throttled_quantity": "0",
+                "blocked_quantity": "20",
+                "reason": "Monthly quota exceeded",
+            },
+        ],
     )
 
     runner.print_throttle_log("2026-10-01", "2026-10-31")
@@ -131,5 +151,7 @@ def test_print_throttle_log(tmp_path, monkeypatch, capsys):
     output = capsys.readouterr().out
 
     assert "EV-001978" in output
-    assert "throttled=40" in output
-    assert "Throttled events: 1" in output
+    assert "throttled=40.0" in output
+    assert "EV-BLOCKED" in output
+    assert "blocked=20.0" in output
+    assert "Throttled events: 2" in output
