@@ -144,7 +144,7 @@ def print_throttle_log(start_date, end_date):
             f"{reason}"
         )
 
-    print(f"Throttled events: {count}")
+    print(f"Affected events (throttled or blocked): {count}")
 
 def execute_commands():
 

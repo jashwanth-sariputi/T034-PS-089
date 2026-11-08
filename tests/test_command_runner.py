@@ -154,4 +154,4 @@ def test_print_throttle_log(tmp_path, monkeypatch, capsys):
     assert "throttled=40.0" in output
     assert "EV-BLOCKED" in output
     assert "blocked=20.0" in output
-    assert "Throttled events: 2" in output
+    assert "Affected events (throttled or blocked): 2" in output
