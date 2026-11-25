@@ -312,3 +312,23 @@ The command file makes the execution sequence reproducible, while terminal repor
 ---
 
 **Repository:** https://github.com/jashwanth-sariputi/T034-PS-089
+
+## 19. Project Demonstration Video
+
+Watch the MeterWise project demonstration:
+
+**[View PS-089 MeterWise Demo Video](https://drive.google.com/file/d/1qoIeRjiNfni-o5r5RfSTvoMcnseIDhSI/view?usp=drivesdk)**
+
+The demonstration introduces the project and explains its command-driven workflow, core billing stages, and sample customer results.
+
+### Key points covered in the demonstration
+
+- **Project objective:** Convert raw API usage events into reliable monthly billing results.
+- **Processing workflow:** Event ingestion, validation, usage aggregation, rating, and invoice generation.
+- **Event validation:** Idempotency checks and rejection of late or future-dated events.
+- **Usage metering:** SUM for API calls, hourly maximum followed by monthly averaging for storage, and unique counting for active users.
+- **Pricing and billing:** Free allowances, volume and graduated pricing, plan quotas, commitments, overage, SLA credits, and GST.
+- **Customer example:** API-001 (Swiggle Foods Tech), with September and October 2026 usage and invoice results.
+- **Generated evidence:** Terminal reports and CSV outputs that support review of event decisions, usage, rating, and invoices.
+
+The customer example in the video is a two-month summary covering September and October 2026.
